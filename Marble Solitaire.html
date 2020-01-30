@@ -1,0 +1,352 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<script src="./Marble Solitaire_files/jquery-3.4.0.min.js.download" 
+integrity="sha256-BJeo0qm959uMBGb65z40ejJYGSgR7REI4+CW1fNKwOg=" crossorigin="anonymous">
+</script><style media="screen" type="text/css">
+td {
+  width:40px;
+  height:40px;
+}
+.circle {
+  display: block;
+  width: 30px;
+  height: 30px;
+  margin: 0 auto;
+  border-radius: 50%;
+}
+.num-input {
+  width: 30px;
+  border-radius: 20%;
+}
+</style>
+<title>Marble Solitaire</title>
+</head>
+<body style="font-family: Helvetica, sans-serif">
+<!--
+<select id="game-type">
+<option>English</option>
+<option>European</option>
+<option>Triangle</option>
+</select>
+-->
+Arm thickness: <input id="arm" type="text" class="num-input">
+<!-- Starting empty row: <input id="sRow" type="text" class="num-input">, column: <input id="sCol" type="text" class="num-input"> -->
+<button id="new-game" style="border-radius:5px">New Game</button>
+<table id="board" border="0"></table>
+<div style="display:none" id="score-disp">Score: <span id="score"></span></div>
+<div id="msg"></div>
+<script>
+var slotTpl = '<div class="circle" style="%%%"/>'; // html snippet for PEG/EMPTY
+// an "enum" representing slot values. PEG and EMPTY have styles.
+var Slot = {
+  PEG: 1,
+  EMPTY: 2,
+  INVALID: 3,
+  prop: {
+    1: {style: "background-color:#4b5bb3;box-shadow: inset -5px -5px 5px rgba(0,0,0,.5);"},
+    2: {style: "background-color:white;box-shadow: inset 4px 4px 5px rgba(0,0,0,.5);"}
+  }
+};
+
+class MarbleSolitaireView {
+  // set up the html table and score display
+  constructor(dim) {
+    if(dim <= 0) throw "Board side dimension must be positive";
+    this.boardSide = dim;
+    var tmpHtml = '';
+    for(var r = 0; r < dim; r++) {
+      tmpHtml += '<tr id="'+r+'">';
+      for(var c = 0; c < dim; c++) {
+        tmpHtml += '<td id="'+r+'-'+c+'"></td>';
+      }
+      tmpHtml += '</tr>';
+    }
+    $('#board').html(tmpHtml);
+    $('#score-disp').show();
+  }
+  // take a 2d array board, display it in the table; display given score
+  renderBoard(board, score) {
+    if(board.length != this.boardSide) {
+      throw "Invalid board dimension: " + board.length;
+    }
+    for(var r = 0; r < board.length; r++) {
+      if(board[r].length != this.boardSide) {
+        throw "Invalid board dimension: " + board[r].length;
+      }
+      for(var c = 0; c < board[r].length; c++) {
+        if(board[r][c] === Slot.PEG || board[r][c] === Slot.EMPTY) {
+          $('#'+r+'-'+c).html(slotTpl.replace(/%%%/, Slot.prop[board[r][c]].style));
+        }
+      }
+    }
+    $('#score').html(score);
+  }
+  // display a message below the board
+  setMessage(msg) {
+    $('#msg').html(msg);
+  }
+  // "highlight" a cell: change its background color to the given color.
+  // cells are 0-indexed from upper left to lower right
+  highlightCell(r, c, color) {
+    if(r < 0 || r >= this.boardSide || c < 0 || c >= this.boardSide) {
+      throw "Invalid cell position: " + r + "," + c;
+    }
+    $('#'+r+'-'+c).css('background-color', color);
+  }
+  // add a function to be executed when a cell is clicked. Function func must take
+  // two arguments, row and col (0-based indices, upper left to lower right)
+  addCellClickListener(func) {
+    $('td').click(function(evt) {
+      var cell = $(evt.target).attr('id') || $(evt.target).parent('td').attr('id');
+      var [row, col] = cell.split('-');
+      func(+row, +col);
+    });
+  }
+}
+
+/*** Don't modify code above this line. Fill in your code BELOW this line. *****/
+
+class MarbleSolitaireController {
+  // take in model m and view v
+  constructor(m, v) {
+    v.renderBoard(m.getBoard(), "");
+    // board starts out completely filled; first click selects empty slot, and game begins.
+    // to start out, may be easier to hardcode a starting empty slot, get the game play right, then deal with this.
+    v.setMessage("Please Make Move OwO ~");
+    v.addCellClickListener(function(row, col) {
+      m.clicker(row, col); 
+      v.renderBoard(m.getBoard(), m.getScore());
+      if (m.isGameOver()) {
+        v.setMessage("Game Over");
+      } else {
+        v.setMessage("¯\_(ツ)_/¯");
+      }
+
+      console.log(row, col);
+      
+    }.bind(this));
+    // ^^^ ensure that in the body of the function "this" refers to the controller object, not the inner function context
+  }
+}
+
+// English style /**** YOUR CODE HERE *****/
+class MarbleSolitaireModel {
+  constructor(armLength) {
+    var board, armLength, boundary, height, width, selectedSpot; 
+    this.armLength = parseInt(armLength);
+    this.selectedSpot = false; 
+  
+    //Checks to see if the arm thickness is even or if it's greater than 1 - throws an exception if it is.
+    if (this.armLength % 2 == 0 || this.armLength <= 1) {
+      throw "Arm Thickness is not a positive odd number greater than 1";
+    }
+
+    this.width = (3 * this.armLength) - 2;
+    this.height = (3 * this.armLength) - 2;
+
+    /**
+     * Calculates and creates the size of the board depending on the given arm thickness.
+     */
+    this.board = new Array(this.width);
+    for (var y = 0; y < this.height; y++) {
+      this.board[y] = new Array(this.height); 
+    }
+
+    /**
+     * Fill the board with the appropriate pieces.
+     */
+    this.boundary = Math.floor((this.width - this.armLength) / 2);
+    for (var i = 0; i < this.width; i++) {
+      for (var j = 0; j < this.height; j++) {
+        if ((i < this.boundary || i >= this.width - this.boundary)
+                && (j < this.boundary || j >= this.height - this.boundary)) {
+          this.board[i][j] = Slot.INVALID;
+        } else {
+          this.board[i][j] = Slot.PEG;
+        }
+      }
+    }
+
+    /**
+     * Put the empty slot in the board in the given position.
+     */
+    this.board[Math.floor((this.width) / 2)][Math.floor((this.height) / 2)] = Slot.EMPTY;
+  }
+  // return board width (e.g. 7 for arm thickness 3)
+  getBoardSide() {
+    return this.width;  
+  }
+  // return a 2d array of Slot representing current game state
+  getBoard() {
+    return this.board; 
+  }
+
+  /**
+  * Move a single marble from a given position to another given position. A move is valid only if
+  * the from and to positions are valid. Specific implementations may place additional constraints
+  * on the validity of a move.
+  */
+  move(fromRow, fromCol, toRow, toCol) {
+    if (this.isValidMove(fromRow, fromCol, toRow, toCol)) {
+      this.board[fromRow][fromCol] = Slot.EMPTY;
+      this.board[toRow][toCol] = Slot.PEG;
+      this.board[Math.floor((fromRow + toRow) / 2)][Math.floor((fromCol + toCol) / 2)] = Slot.EMPTY;
+    } else {
+      throw "Please input a valid move.";
+    }
+  }
+
+  /**
+  * Determine and return if the game is over or not. A game is over if no more moves can be made.
+  */
+  isGameOver() {
+    for (var i = 0; i < this.width; i++) {
+      for (var j = 0; j < this.height; j++) {
+        if (this.board[i][j] == Slot.PEG) {
+          if (this.hasValidMoves(i, j)) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+  /**
+  * Return the number of marbles currently on the board.
+  */
+  getScore() {
+    /**
+    * Iterates through the board and adds one to score whenever there is a marble.
+    */
+    var score = 0;
+    for (var i = 0; i < this.width; i++) {
+      for (var j = 0; j < this.height; j++) {
+        if (this.board[i][j] == Slot.PEG) {
+          score += 1;
+        }
+      }
+    }
+    return score;
+  }
+
+  /**
+  * Helper method that checks to see if the given move is a valid move.
+  */
+  isValidMove(fromRow, fromCol, toRow, toCol) {
+    return this.isOrthogonal(fromRow, fromCol, toRow, toCol) && this.isNotOutOfBounds(toRow, toCol) &&
+            this.isEmpty(toRow, toCol) && this.isMoveMarble(fromRow, fromCol) &&
+            this.isOverMarble(fromRow, fromCol, toRow, toCol);
+  }
+
+  /**
+  * Helper methods that checks if the given move is not orthogonal or more than two.
+  */
+  isOrthogonal(fromRow, fromCol, toRow, toCol) {
+    return (Math.abs(toRow - fromRow) == 2 && toCol == fromCol)
+            || (Math.abs(toCol - fromCol) == 2 && toRow == fromRow);
+  }
+
+  /**
+  * Helper methods that checks if player is trying to move Out of Bounds.
+  */
+  isNotOutOfBounds(toRow, toCol) {
+    return !(toRow >= this.board.length
+            || toCol >= this.board.length
+            || toRow < 0
+            || toCol < 0
+            || this.board[toRow][toCol] == Slot.INVALID);
+  }
+
+  /**
+  * Helper methods that checks if the player is trying to move into a slot that isn't empty.
+  */
+  isEmpty(toRow, toCol) {
+    return this.board[toRow][toCol] == Slot.EMPTY;
+  }
+
+  /**
+  * Helper methods that checks if the player is trying to move something that isn't a marble.
+  */
+  isMoveMarble(fromRow, fromCol) {
+    return this.board[fromRow][fromCol] == Slot.PEG;
+  }
+
+  /**
+  * Helper methods that checks if trying to move a marble over a non-marble.
+  */
+  isOverMarble(fromRow, fromCol, toRow, toCol) {
+    if (Math.abs(toRow - fromRow) == 2) {
+      if (fromRow < toRow && this.board[fromRow + 1][fromCol] == Slot.PEG) {
+        return true;
+      } else if (fromRow > toRow && this.board[fromRow - 1][fromCol] == Slot.PEG) {
+        return true;
+      }
+    } else if (Math.abs(toCol - fromCol) == 2) {
+      if (fromCol < toCol && this.board[fromRow][fromCol + 1] == Slot.PEG) {
+        return true;
+      } else if (fromCol > toCol && this.board[fromRow][fromCol - 1] == Slot.PEG) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+  * Checks to see if the given fromRow and fromCol has any valid moves left.
+  */
+  hasValidMoves(fromRow, fromCol) {
+    var topRow = this.isValidMove(fromRow, fromCol, fromRow - 2, fromCol);
+    var botRow = this.isValidMove(fromRow, fromCol, fromRow + 2, fromCol);
+    var leftCol = this.isValidMove(fromRow, fromCol, fromRow, fromCol - 2);
+    var rightCol = this.isValidMove(fromRow, fromCol, fromRow, fromCol + 2);
+
+    return topRow || botRow || leftCol || rightCol;
+  }
+
+  clicker(x, y) {
+    if (this.isNotOutOfBounds(x, y)) {
+      if (this.selectedSpot == false && this.board[x][y] == Slot.PEG) {
+        this.selectedSpot = [x, y];
+      } else {
+        try {
+          this.doTheMove(x, y);
+          this.selectedSpot = false;
+        }
+        catch (err) {
+          alert(err);
+        }
+      }
+    }
+    else {
+      throw "Invalid click";
+    }
+  }
+
+  // Executes the given move from the selected position to the to position.
+  doTheMove(x, y) {
+    try {
+      this.move(this.selectedSpot[0], this.selectedSpot[1], x, y);
+    }
+    catch (err) {
+      alert(err);
+    }
+  }
+}
+
+var model, view, ctrl;
+
+$('#new-game').click(function(evt) {
+  try {
+    model = new MarbleSolitaireModel($('#arm').val());
+    view = new MarbleSolitaireView(model.getBoardSide());
+    ctrl = new MarbleSolitaireController(model, view);
+  } catch(err) {
+    alert(err);
+  }
+});
+</script>
+
+
+</body></html>
